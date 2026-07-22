@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>grep://endpoints</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#0b0906;
+    --panel:#151009;
+    --panel-alt:#1c1610;
+    --edge:#3a2f1e;
+    --edge-bright:#5c4a2a;
+    --amber:#ffb000;
+    --amber-bright:#ffd166;
+    --amber-dim:#8a5f18;
+    --text:#e9dcc3;
+    --text-muted:#8f7f66;
+    --text-faint:#5c503e;
+    --danger:#ff5f56;
+    --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:
+      radial-gradient(circle at 15% -10%, rgba(255,176,0,0.06), transparent 40%),
+      var(--void);
+    color:var(--text);
+    font-family:var(--mono);
+    min-height:100vh;
+    padding:32px 20px 80px;
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important; }
+  }
+
+  .wrap{ max-width:1180px; margin:0 auto; }
+
+  /* ---------- header ---------- */
+  .eyebrow{
+    font-size:11px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--amber-dim); margin-bottom:10px; display:flex; align-items:center; gap:10px;
+  }
+  .eyebrow::before{ content:"//"; color:var(--edge-bright); }
+  h1{
+    font-size:clamp(28px, 5vw, 44px);
+    margin:0 0 6px;
+    font-weight:800;
+    letter-spacing:-0.01em;
+    color:var(--amber-bright);
+  }
+  h1 .cursor{
+    display:inline-block; width:0.5em; height:0.9em; background:var(--amber);
+    margin-left:6px; transform:translateY(2px);
+    animation:blink 1.1s steps(1) infinite;
+  }
+  @keyframes blink{ 50%{ opacity:0; } }
+  .sub{ color:var(--text-muted); font-size:14px; max-width:640px; line-height:1.6; margin-bottom:34px; }
+  .sub b{ color:var(--text); font-weight:500; }
+
+  /* ---------- drop zone ---------- */
+  .drop{
+    position:relative;
+    border:1px dashed var(--edge-bright);
+    border-radius:2px;
+    background:linear-gradient(180deg, var(--panel), var(--void));
+    padding:34px 24px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .drop:hover, .drop.drag{
+    border-color:var(--amber);
+    background:linear-gradient(180deg, var(--panel-alt), var(--void));
+  }
+  .drop:focus-visible{ outline:2px solid var(--amber); outline-offset:3px; }
+  .drop .prompt{ color:var(--amber); font-size:14px; letter-spacing:.05em; }
+  .drop .prompt b{ color:var(--amber-bright); }
+  .drop .hint{ color:var(--text-faint); font-size:12px; margin-top:8px; }
+  .drop input{ display:none; }
+
+  .filelist{ margin-top:14px; display:flex; flex-wrap:wrap; gap:8px; }
+  .filechip{
+    font-size:11.5px; color:var(--text-muted);
+    border:1px solid var(--edge); background:var(--panel);
+    padding:5px 10px; border-radius:2px; display:flex; align-items:center; gap:8px;
+  }
+  .filechip .n{ color:var(--amber-dim); }
+  .filechip button{
+    background:none; border:none; color:var(--text-faint); cursor:pointer; font-family:var(--mono);
+    font-size:13px; line-height:1; padding:0;
+  }
+  .filechip button:hover{ color:var(--danger); }
+
+  /* ---------- log ---------- */
+  .log{
+    margin-top:16px; font-size:12px; color:var(--text-faint);
+    max-height:110px; overflow-y:auto; display:none;
+  }
+  .log.show{ display:block; }
+  .log div{ padding:1px 0; }
+  .log .ok{ color:var(--amber-dim); }
+  .log .ok b{ color:var(--amber); }
+
+  /* ---------- stats bar ---------- */
+  .stats{
+    display:none;
+    margin-top:28px;
+    border:1px solid var(--edge);
+    background:var(--panel);
+    padding:14px 18px;
+    gap:28px;
+    flex-wrap:wrap;
+  }
+  .stats.show{ display:flex; }
+  .stat{ display:flex; flex-direction:column; gap:2px; }
+  .stat .num{ font-size:22px; font-weight:800; color:var(--amber-bright); }
+  .stat .lbl{ font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-faint); }
+
+  /* ---------- global filter ---------- */
+  .toolbar{
+    display:none;
+    margin-top:18px;
+    align-items:center;
+    gap:12px;
+  }
+  .toolbar.show{ display:flex; }
+  .toolbar input[type=text]{
+    flex:1; background:var(--panel); border:1px solid var(--edge); color:var(--text);
+    font-family:var(--mono); font-size:13px; padding:9px 12px; border-radius:2px;
+  }
+  .toolbar input[type=text]:focus-visible{ outline:2px solid var(--amber); outline-offset:1px; border-color:var(--amber); }
+  .toolbar input[type=text]::placeholder{ color:var(--text-faint); }
+  .btn{
+    background:transparent; border:1px solid var(--edge-bright); color:var(--amber);
+    font-family:var(--mono); font-size:12px; padding:9px 14px; border-radius:2px;
+    cursor:pointer; letter-spacing:.03em; white-space:nowrap;
+    transition:background .12s ease, color .12s ease;
+  }
+  .btn:hover{ background:var(--amber); color:#1a1206; }
+  .btn:focus-visible{ outline:2px solid var(--amber); outline-offset:2px; }
+  .btn.ghost{ color:var(--text-muted); border-color:var(--edge); }
+  .btn.ghost:hover{ background:var(--panel-alt); color:var(--text); }
+
+  /* ---------- results grid ---------- */
+  .grid{
+    display:none;
+    margin-top:22px;
+    grid-template-columns:repeat(3, 1fr);
+    gap:16px;
+  }
+  .grid.show{ display:grid; }
+  @media (max-width:920px){ .grid{ grid-template-columns:1fr; } }
+
+  .pane{
+    border:1px solid var(--edge);
+    background:var(--panel);
+    display:flex; flex-direction:column;
+    min-height:200px;
+    max-height:520px;
+  }
+  .pane-head{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 12px; border-bottom:1px solid var(--edge);
+    background:var(--panel-alt);
+  }
+  .pane-title{ display:flex; align-items:center; gap:8px; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--amber); }
+  .pane-count{
+    font-size:11px; color:var(--void); background:var(--amber); padding:1px 7px; border-radius:10px; font-weight:700;
+  }
+  .pane-actions{ display:flex; gap:6px; }
+  .icon-btn{
+    background:none; border:1px solid var(--edge); color:var(--text-faint);
+    font-family:var(--mono); font-size:10.5px; padding:4px 8px; border-radius:2px; cursor:pointer;
+  }
+  .icon-btn:hover{ color:var(--amber); border-color:var(--amber-dim); }
+
+  .pane-body{ overflow-y:auto; flex:1; }
+  .row{
+    display:flex; align-items:baseline; gap:10px;
+    padding:7px 12px; font-size:12.5px; cursor:pointer;
+    border-bottom:1px solid rgba(58,47,30,0.4);
+  }
+  .row:hover{ background:var(--panel-alt); }
+  .row .ln{ color:var(--text-faint); font-size:11px; min-width:26px; text-align:right; user-select:none; }
+  .row .val{
+    color:var(--text); word-break:break-all; flex:1;
+  }
+  .row .val mark{
+    background:var(--amber); color:#1a1206; padding:0 1px; border-radius:1px;
+  }
+  .row .cnt{
+    font-size:10px; color:var(--text-faint); border:1px solid var(--edge); padding:0 5px; border-radius:8px; white-space:nowrap;
+  }
+  .empty{ padding:24px 16px; color:var(--text-faint); font-size:12px; text-align:center; }
+
+  .toast{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--amber); color:#1a1206; font-size:12px; font-weight:700;
+    padding:9px 16px; border-radius:3px; opacity:0; pointer-events:none;
+    transition:opacity .18s ease, transform .18s ease;
+    letter-spacing:.03em;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  footer{ margin-top:40px; color:var(--text-faint); font-size:11px; text-align:center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">file recon utility</div>
+  <h1>grep://endpoints<span class="cursor"></span></h1>
+  <p class="sub">Drop in source files &mdash; JS, HTML, JSON, config, whatever &mdash; and pull out every <b>unique URL</b>, <b>endpoint path</b>, and <b>parameter name</b> hiding in them. Everything runs locally in your browser; nothing leaves this tab.</p>
+
+  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Upload files to scan">
+    <div class="prompt"><b>Drop files</b> here, or click to browse</div>
+    <div class="hint">.js .ts .jsx .html .json .css .txt .xml .php .py .yml — any plain-text file</div>
+    <input type="file" id="fileInput" multiple>
+  </div>
+  <div class="filelist" id="filelist"></div>
+  <div class="log" id="log"></div>
+
+  <div class="stats" id="stats">
+    <div class="stat"><div class="num" id="statFiles">0</div><div class="lbl">files scanned</div></div>
+    <div class="stat"><div class="num" id="statUrls">0</div><div class="lbl">unique urls</div></div>
+    <div class="stat"><div class="num" id="statEndpoints">0</div><div class="lbl">unique endpoints</div></div>
+    <div class="stat"><div class="num" id="statParams">0</div><div class="lbl">unique params</div></div>
+  </div>
+
+  <div class="toolbar" id="toolbar">
+    <input type="text" id="filterInput" placeholder="filter results... (e.g. /api, token, admin)">
+    <button class="btn" id="exportJson">export .json</button>
+    <button class="btn ghost" id="exportTxt">export .txt</button>
+    <button class="btn ghost" id="clearAll">clear</button>
+  </div>
+
+  <div class="grid" id="grid">
+    <div class="pane">
+      <div class="pane-head">
+        <div class="pane-title">urls <span class="pane-count" id="cUrls">0</span></div>
+        <div class="pane-actions"><button class="icon-btn" data-copy="urls">copy all</button></div>
+      </div>
+      <div class="pane-body" id="paneUrls"></div>
+    </div>
+    <div class="pane">
+      <div class="pane-head">
+        <div class="pane-title">endpoints <span class="pane-count" id="cEndpoints">0</span></div>
+        <div class="pane-actions"><button class="icon-btn" data-copy="endpoints">copy all</button></div>
+      </div>
+      <div class="pane-body" id="paneEndpoints"></div>
+    </div>
+    <div class="pane">
+      <div class="pane-head">
+        <div class="pane-title">parameters <span class="pane-count" id="cParams">0</span></div>
+        <div class="pane-actions"><button class="icon-btn" data-copy="params">copy all</button></div>
+      </div>
+      <div class="pane-body" id="paneParams"></div>
+    </div>
+  </div>
+
+  <footer>runs entirely client-side &middot; no files are uploaded anywhere</footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  const dropzone = document.getElementById('drop');
+  const fileInput = document.getElementById('fileInput');
+  const filelistEl = document.getElementById('filelist');
+  const logEl = document.getElementById('log');
+  const statsEl = document.getElementById('stats');
+  const toolbarEl = document.getElementById('toolbar');
+  const gridEl = document.getElementById('grid');
+  const filterInput = document.getElementById('filterInput');
+  const toastEl = document.getElementById('toast');
+
+  // data[category] = Map(value -> Set(filenames))
+  const data = { urls: new Map(), endpoints: new Map(), params: new Map() };
+  const scannedFiles = [];
+
+  // ---------- regexes ----------
+  const URL_RE = /\bhttps?:\/\/[^\s"'`<>\)\]\}\\]+/g;
+  const ENDPOINT_RE = /(["'`])(\/(?!\/)[a-zA-Z0-9_][a-zA-Z0-9_\-\.\/\{\}\$]*)\1/g;
+  const QUERY_PARAM_RE = /[?&]([a-zA-Z_][a-zA-Z0-9_\-]{0,50})=/g;
+  const FORM_NAME_RE = /\bname=["']([a-zA-Z0-9_\-\[\]]{1,60})["']/g;
+  const REQ_PARAM_RE = /\breq\.(?:query|params|body)\.([a-zA-Z_][a-zA-Z0-9_]*)/g;
+  const PHP_PARAM_RE = /\$_(?:GET|POST|REQUEST)\[['"]([a-zA-Z0-9_]+)['"]\]/g;
+
+  const STATIC_EXT = /\.(png|jpe?g|gif|svg|webp|woff2?|ttf|eot|ico|css|map)(\?.*)?$/i;
+
+  function trimUrl(u){
+    return u.replace(/[,.;:'"\)\]\}]+$/,'');
+  }
+
+  function addMatch(cat, value, filename){
+    if(!value) return;
+    if(!data[cat].has(value)) data[cat].set(value, new Set());
+    data[cat].get(value).add(filename);
+  }
+
+  function scanText(text, filename){
+    let m;
+    URL_RE.lastIndex = 0;
+    while((m = URL_RE.exec(text))){
+      const url = trimUrl(m[0]);
+      addMatch('urls', url, filename);
+      const qIdx = url.indexOf('?');
+      if(qIdx !== -1){
+        let qm;
+        QUERY_PARAM_RE.lastIndex = 0;
+        const qs = url.slice(qIdx);
+        while((qm = QUERY_PARAM_RE.exec(qs))) addMatch('params', qm[1], filename);
+      }
+    }
+
+    ENDPOINT_RE.lastIndex = 0;
+    while((m = ENDPOINT_RE.exec(text))){
+      const path = m[2];
+      if(path.length < 2) continue;
+      if(STATIC_EXT.test(path)) continue;
+      addMatch('endpoints', path, filename);
+    }
+
+    QUERY_PARAM_RE.lastIndex = 0;
+    while((m = QUERY_PARAM_RE.exec(text))) addMatch('params', m[1], filename);
+
+    FORM_NAME_RE.lastIndex = 0;
+    while((m = FORM_NAME_RE.exec(text))) addMatch('params', m[1], filename);
+
+    REQ_PARAM_RE.lastIndex = 0;
+    while((m = REQ_PARAM_RE.exec(text))) addMatch('params', m[1], filename);
+
+    PHP_PARAM_RE.lastIndex = 0;
+    while((m = PHP_PARAM_RE.exec(text))) addMatch('params', m[1], filename);
+  }
+
+  function logLine(text, cls){
+    const d = document.createElement('div');
+    if(cls) d.className = cls;
+    d.innerHTML = text;
+    logEl.appendChild(d);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function renderChips(){
+    filelistEl.innerHTML = '';
+    scannedFiles.forEach((f, i) => {
+      const chip = document.createElement('div');
+      chip.className = 'filechip';
+      chip.innerHTML = `<span>${escapeHtml(f.name)}</span><span class="n">${formatBytes(f.size)}</span>`;
+      const btn = document.createElement('button');
+      btn.textContent = '\u00d7';
+      btn.setAttribute('aria-label', 'remove ' + f.name);
+      btn.onclick = () => removeFile(i);
+      chip.appendChild(btn);
+      filelistEl.appendChild(chip);
+    });
+  }
+
+  function removeFile(idx){
+    scannedFiles.splice(idx, 1);
+    // rebuild everything from remaining files
+    data.urls.clear(); data.endpoints.clear(); data.params.clear();
+    const remaining = [...scannedFiles];
+    scannedFiles.length = 0;
+    logEl.innerHTML = '';
+    if(remaining.length === 0){
+      renderChips();
+      renderAll();
+      statsEl.classList.remove('show');
+      toolbarEl.classList.remove('show');
+      gridEl.classList.remove('show');
+      logEl.classList.remove('show');
+      return;
+    }
+    remaining.forEach(f => { scannedFiles.push(f); scanText(f.text, f.name); });
+    renderChips();
+    renderAll();
+  }
+
+  function formatBytes(n){
+    if(n < 1024) return n + 'B';
+    if(n < 1024*1024) return (n/1024).toFixed(1) + 'KB';
+    return (n/1024/1024).toFixed(1) + 'MB';
+  }
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function highlight(text, query){
+    if(!query) return escapeHtml(text);
+    const esc = escapeHtml(text);
+    const q = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    try{
+      return esc.replace(new RegExp('('+q+')','ig'), '<mark>$1</mark>');
+    }catch(e){ return esc; }
+  }
+
+  function renderPane(cat, containerId, countId){
+    const container = document.getElementById(containerId);
+    const query = filterInput.value.trim();
+    const entries = [...data[cat].entries()]
+      .filter(([val]) => !query || val.toLowerCase().includes(query.toLowerCase()))
+      .sort((a,b) => a[0].localeCompare(b[0]));
+
+    document.getElementById(countId).textContent = data[cat].size;
+    container.innerHTML = '';
+
+    if(entries.length === 0){
+      const e = document.createElement('div');
+      e.className = 'empty';
+      e.textContent = data[cat].size === 0 ? 'nothing found yet' : 'no matches for filter';
+      container.appendChild(e);
+      return;
+    }
+
+    entries.forEach(([val, files], i) => {
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.title = 'seen in: ' + [...files].join(', ') + '  (click to copy)';
+      row.innerHTML = `<span class="ln">${i+1}</span><span class="val">${highlight(val, query)}</span><span class="cnt">${files.size}</span>`;
+      row.onclick = () => copyToClipboard(val);
+      container.appendChild(row);
+    });
+  }
+
+  function renderAll(){
+    renderPane('urls', 'paneUrls', 'cUrls');
+    renderPane('endpoints', 'paneEndpoints', 'cEndpoints');
+    renderPane('params', 'paneParams', 'cParams');
+    document.getElementById('statFiles').textContent = scannedFiles.length;
+    document.getElementById('statUrls').textContent = data.urls.size;
+    document.getElementById('statEndpoints').textContent = data.endpoints.size;
+    document.getElementById('statParams').textContent = data.params.size;
+  }
+
+  function copyToClipboard(text){
+    navigator.clipboard.writeText(text).then(() => showToast('copied: ' + (text.length > 40 ? text.slice(0,40)+'…' : text)));
+  }
+
+  function showToast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => toastEl.classList.remove('show'), 1600);
+  }
+
+  async function handleFiles(fileListRaw){
+    const files = [...fileListRaw];
+    if(files.length === 0) return;
+    logEl.classList.add('show');
+    for(const f of files){
+      try{
+        const text = await f.text();
+        scannedFiles.push({ name: f.name, size: f.size, text });
+        scanText(text, f.name);
+        logLine(`<span class="ok">[+] scanned <b>${escapeHtml(f.name)}</b> — ${formatBytes(f.size)}</span>`);
+      }catch(e){
+        logLine(`[!] skipped ${escapeHtml(f.name)} (couldn't read as text)`);
+      }
+    }
+    renderChips();
+    renderAll();
+    statsEl.classList.add('show');
+    toolbarEl.classList.add('show');
+    gridEl.classList.add('show');
+  }
+
+  // ---------- events ----------
+  dropzone.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); fileInput.click(); } });
+  fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+  ['dragenter','dragover'].forEach(evt => dropzone.addEventListener(evt, e => {
+    e.preventDefault(); dropzone.classList.add('drag');
+  }));
+  ['dragleave','drop'].forEach(evt => dropzone.addEventListener(evt, e => {
+    e.preventDefault(); dropzone.classList.remove('drag');
+  }));
+  dropzone.addEventListener('drop', e => {
+    if(e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+  });
+
+  filterInput.addEventListener('input', renderAll);
+
+  document.querySelectorAll('.icon-btn[data-copy]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cat = btn.getAttribute('data-copy');
+      const list = [...data[cat].keys()].sort().join('\n');
+      if(!list){ showToast('nothing to copy'); return; }
+      navigator.clipboard.writeText(list).then(() => showToast(cat + ' copied to clipboard'));
+    });
+  });
+
+  document.getElementById('exportJson').addEventListener('click', () => {
+    const out = {};
+    for(const cat of ['urls','endpoints','params']){
+      out[cat] = [...data[cat].entries()].sort((a,b)=>a[0].localeCompare(b[0]))
+        .map(([value, files]) => ({ value, sources: [...files] }));
+    }
+    downloadFile('scan-results.json', JSON.stringify(out, null, 2), 'application/json');
+  });
+
+  document.getElementById('exportTxt').addEventListener('click', () => {
+    let out = '';
+    for(const [cat,label] of [['urls','URLS'],['endpoints','ENDPOINTS'],['params','PARAMETERS']]){
+      out += `# ${label} (${data[cat].size})\n`;
+      out += [...data[cat].keys()].sort().join('\n');
+      out += '\n\n';
+    }
+    downloadFile('scan-results.txt', out, 'text/plain');
+  });
+
+  document.getElementById('clearAll').addEventListener('click', () => {
+    scannedFiles.length = 0;
+    data.urls.clear(); data.endpoints.clear(); data.params.clear();
+    filelistEl.innerHTML = '';
+    logEl.innerHTML = '';
+    logEl.classList.remove('show');
+    statsEl.classList.remove('show');
+    toolbarEl.classList.remove('show');
+    gridEl.classList.remove('show');
+    fileInput.value = '';
+    filterInput.value = '';
+  });
+
+  function downloadFile(filename, content, mime){
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('downloaded ' + filename);
+  }
+})();
+</script>
+</body>
+</html>
