@@ -171,6 +171,18 @@
   .btn.ghost{ color:var(--text-muted); border-color:var(--edge); }
   .btn.ghost:hover{ background:var(--panel-alt); color:var(--text); }
 
+  /* ---------- filter hint ---------- */
+  .filter-hint{
+    display:none;
+    margin-top:8px;
+    font-size:11px; color:var(--text-faint); line-height:1.6;
+  }
+  .filter-hint.show{ display:block; }
+  .filter-hint code{
+    background:var(--panel); border:1px solid var(--edge); color:var(--amber-dim);
+    padding:1px 5px; border-radius:2px; font-family:var(--mono); font-size:10.5px;
+  }
+
   /* ---------- results grid ---------- */
   .grid{
     display:none;
@@ -203,6 +215,15 @@
     font-family:var(--mono); font-size:10.5px; padding:4px 8px; border-radius:2px; cursor:pointer;
   }
   .icon-btn:hover{ color:var(--amber); border-color:var(--amber-dim); }
+
+  .pane-filter{ padding:8px 10px; border-bottom:1px solid var(--edge); background:var(--panel); }
+  .pane-filter input{
+    width:100%; background:var(--void); border:1px solid var(--edge); color:var(--text);
+    font-family:var(--mono); font-size:11.5px; padding:6px 9px; border-radius:2px;
+  }
+  .pane-filter input::placeholder{ color:var(--text-faint); }
+  .pane-filter input:focus-visible{ outline:2px solid var(--amber); outline-offset:1px; border-color:var(--amber); }
+  .pane-filter input.active{ border-color:var(--amber-dim); color:var(--amber-bright); }
 
   .pane-body{ overflow-y:auto; flex:1; }
   .row{
