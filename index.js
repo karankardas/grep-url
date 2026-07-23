@@ -1,4 +1,3 @@
-
 // ============================================================
 // Worker source: does all regex scanning off the main thread,
 // reading each file in chunks so a 50MB+ file never gets loaded
@@ -100,11 +99,17 @@ const WORKER_SRC = `
   const toolbarEl = document.getElementById('toolbar');
   const gridEl = document.getElementById('grid');
   const filterInput = document.getElementById('filterInput');
+  const filterHint = document.getElementById('filterHint');
   const toastEl = document.getElementById('toast');
   const progressWrap = document.getElementById('progressWrap');
   const progressLabel = document.getElementById('progressLabel');
   const progressFill = document.getElementById('progressFill');
   const cancelBtn = document.getElementById('cancelScan');
+  const paneFilterInputs = {
+    urls: document.getElementById('filterUrls'),
+    endpoints: document.getElementById('filterEndpoints'),
+    params: document.getElementById('filterParams')
+  };
 
   const PAGE_SIZE = 250;
   // data[category] = Map(value -> Set(filenames))
@@ -166,7 +171,7 @@ const WORKER_SRC = `
     renderAll();
     if(scannedFiles.length === 0){
       statsEl.classList.remove('show');
-      toolbarEl.classList.remove('show');
+      toolbarEl.classList.remove('show'); filterHint.classList.remove('show');
       gridEl.classList.remove('show');
     }
   }
@@ -181,12 +186,72 @@ const WORKER_SRC = `
     return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  function highlight(text, query){
-    if(!query) return escapeHtml(text);
+  // ---------- query parsing ----------
+  // Supports: plain terms (AND, substring, case-insensitive), "exact phrase",
+  // -exclude / !exclude terms, and /regex/flags tokens.
+  function tokenize(q){
+    const tokens = [];
+    const re = /"([^"]*)"|\/((?:\\.|[^\/])+)\/([a-z]*)|(\S+)/g;
+    let m;
+    while((m = re.exec(q))){
+      if(m[1] !== undefined){
+        tokens.push({ kind:'phrase', neg:false, value:m[1] });
+      } else if(m[2] !== undefined){
+        tokens.push({ kind:'regex', neg:false, value:m[2], flags:m[3] || '' });
+      } else if(m[4] !== undefined){
+        let raw = m[4];
+        let neg = false;
+        if(raw.startsWith('-') || raw.startsWith('!')){ neg = true; raw = raw.slice(1); }
+        if(raw) tokens.push({ kind:'term', neg, value:raw });
+      }
+    }
+    return tokens;
+  }
+
+  function parseQuery(q){
+    if(!q || !q.trim()) return null;
+    const tokens = tokenize(q.trim());
+    return tokens.map(t => {
+      let regex = null;
+      try{
+        if(t.kind === 'regex') regex = new RegExp(t.value, t.flags.includes('i') ? t.flags : t.flags + 'i');
+        else regex = new RegExp(t.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      }catch(e){ regex = null; }
+      return { ...t, regex };
+    });
+  }
+
+  function matchesTokens(value, tokens){
+    if(!tokens || tokens.length === 0) return true;
+    for(const t of tokens){
+      if(!t.regex) continue;
+      const hit = t.regex.test(value);
+      if(t.neg && hit) return false;
+      if(!t.neg && !hit) return false;
+    }
+    return true;
+  }
+
+  function combinedTokens(cat){
+    const globalQ = filterInput.value;
+    const localQ = paneFilterInputs[cat] ? paneFilterInputs[cat].value : '';
+    const g = parseQuery(globalQ) || [];
+    const l = parseQuery(localQ) || [];
+    const combined = [...g, ...l];
+    return combined.length ? combined : null;
+  }
+
+  function highlight(text, tokens){
     const esc = escapeHtml(text);
-    const q = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    try{ return esc.replace(new RegExp('('+q+')','ig'), '<mark>$1</mark>'); }
-    catch(e){ return esc; }
+    if(!tokens) return esc;
+    const positive = tokens.filter(t => !t.neg && t.regex);
+    if(positive.length === 0) return esc;
+    // build a single alternation so overlapping/adjacent matches don't double-wrap
+    const parts = positive.map(t => t.kind === 'regex' ? t.value : t.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    try{
+      const combinedRe = new RegExp('(' + parts.join('|') + ')', 'ig');
+      return esc.replace(combinedRe, '<mark>$1</mark>');
+    }catch(e){ return esc; }
   }
 
   function resetPagination(){
@@ -195,9 +260,9 @@ const WORKER_SRC = `
 
   function renderPane(cat, containerId, countId){
     const container = document.getElementById(containerId);
-    const query = filterInput.value.trim();
+    const tokens = combinedTokens(cat);
     const entries = [...data[cat].entries()]
-      .filter(([val]) => !query || val.toLowerCase().includes(query.toLowerCase()))
+      .filter(([val]) => matchesTokens(val, tokens))
       .sort((a,b) => a[0].localeCompare(b[0]));
 
     document.getElementById(countId).textContent = data[cat].size;
@@ -218,7 +283,7 @@ const WORKER_SRC = `
       const row = document.createElement('div');
       row.className = 'row';
       row.title = 'seen in: ' + [...files].slice(0,20).join(', ') + (files.size > 20 ? ' …' : '') + '  (click to copy)';
-      row.innerHTML = `<span class="ln">${i+1}</span><span class="val">${highlight(val, query)}</span><span class="cnt">${files.size}</span>`;
+      row.innerHTML = `<span class="ln">${i+1}</span><span class="val">${highlight(val, tokens)}</span><span class="cnt">${files.size}</span>`;
       row.onclick = () => copyToClipboard(val);
       frag.appendChild(row);
     });
@@ -241,6 +306,7 @@ const WORKER_SRC = `
     document.getElementById('statUrls').textContent = data.urls.size;
     document.getElementById('statEndpoints').textContent = data.endpoints.size;
     document.getElementById('statParams').textContent = data.params.size;
+    updateActionLabels();
   }
 
   function copyToClipboard(text){
@@ -270,7 +336,7 @@ const WORKER_SRC = `
       renderAll();
       if(scannedFiles.length > 0){
         statsEl.classList.add('show');
-        toolbarEl.classList.add('show');
+        toolbarEl.classList.add('show'); filterHint.classList.add('show');
         gridEl.classList.add('show');
       }
       return;
@@ -323,7 +389,7 @@ const WORKER_SRC = `
     renderAll();
     if(scannedFiles.length > 0){
       statsEl.classList.add('show');
-      toolbarEl.classList.add('show');
+      toolbarEl.classList.add('show'); filterHint.classList.add('show');
       gridEl.classList.add('show');
     }
   });
@@ -345,32 +411,72 @@ const WORKER_SRC = `
 
   filterInput.addEventListener('input', () => { resetPagination(); renderAll(); });
 
+  const paneRenderMap = {
+    urls: ['paneUrls','cUrls'],
+    endpoints: ['paneEndpoints','cEndpoints'],
+    params: ['paneParams','cParams']
+  };
+  Object.entries(paneFilterInputs).forEach(([cat, input]) => {
+    input.addEventListener('input', () => {
+      input.classList.toggle('active', input.value.trim().length > 0);
+      paneState[cat] = PAGE_SIZE;
+      const [containerId, countId] = paneRenderMap[cat];
+      renderPane(cat, containerId, countId);
+      updateActionLabels();
+    });
+  });
+
+  function anyFilterActive(){
+    if(filterInput.value.trim()) return true;
+    return Object.values(paneFilterInputs).some(i => i.value.trim());
+  }
+
+  function filteredEntries(cat){
+    const tokens = combinedTokens(cat);
+    return [...data[cat].entries()]
+      .filter(([val]) => matchesTokens(val, tokens))
+      .sort((a,b) => a[0].localeCompare(b[0]));
+  }
+
+  function updateActionLabels(){
+    const active = anyFilterActive();
+    document.getElementById('exportJson').textContent = active ? 'export filtered .json' : 'export .json';
+    document.getElementById('exportTxt').textContent = active ? 'export filtered .txt' : 'export .txt';
+    document.querySelectorAll('.icon-btn[data-copy]').forEach(btn => {
+      btn.textContent = active ? 'copy filtered' : 'copy all';
+    });
+  }
+
   document.querySelectorAll('.icon-btn[data-copy]').forEach(btn => {
     btn.addEventListener('click', () => {
       const cat = btn.getAttribute('data-copy');
-      const list = [...data[cat].keys()].sort().join('\n');
+      const entries = filteredEntries(cat);
+      const list = entries.map(([val]) => val).join('\n');
       if(!list){ showToast('nothing to copy'); return; }
-      navigator.clipboard.writeText(list).then(() => showToast(cat + ' copied to clipboard'));
+      const active = anyFilterActive();
+      navigator.clipboard.writeText(list).then(() => showToast(`${active ? 'filtered ' : ''}${cat} copied (${entries.length}/${data[cat].size})`));
     });
   });
 
   document.getElementById('exportJson').addEventListener('click', () => {
     const out = {};
     for(const cat of ['urls','endpoints','params']){
-      out[cat] = [...data[cat].entries()].sort((a,b)=>a[0].localeCompare(b[0]))
-        .map(([value, files]) => ({ value, sources: [...files] }));
+      out[cat] = filteredEntries(cat).map(([value, files]) => ({ value, sources: [...files] }));
     }
-    downloadFile('scan-results.json', JSON.stringify(out, null, 2), 'application/json');
+    const active = anyFilterActive();
+    downloadFile(active ? 'scan-results-filtered.json' : 'scan-results.json', JSON.stringify(out, null, 2), 'application/json');
   });
 
   document.getElementById('exportTxt').addEventListener('click', () => {
     let out = '';
+    const active = anyFilterActive();
     for(const [cat,label] of [['urls','URLS'],['endpoints','ENDPOINTS'],['params','PARAMETERS']]){
-      out += `# ${label} (${data[cat].size})\n`;
-      out += [...data[cat].keys()].sort().join('\n');
+      const entries = filteredEntries(cat);
+      out += `# ${label} (${entries.length}${active ? ' of ' + data[cat].size : ''})\n`;
+      out += entries.map(([val]) => val).join('\n');
       out += '\n\n';
     }
-    downloadFile('scan-results.txt', out, 'text/plain');
+    downloadFile(active ? 'scan-results-filtered.txt' : 'scan-results.txt', out, 'text/plain');
   });
 
   document.getElementById('clearAll').addEventListener('click', () => {
@@ -383,13 +489,15 @@ const WORKER_SRC = `
     logEl.classList.remove('show');
     progressWrap.classList.remove('show');
     statsEl.classList.remove('show');
-    toolbarEl.classList.remove('show');
+    toolbarEl.classList.remove('show'); filterHint.classList.remove('show');
     gridEl.classList.remove('show');
     dropzone.style.pointerEvents = '';
     dropzone.style.opacity = '';
     fileInput.value = '';
     filterInput.value = '';
+    Object.values(paneFilterInputs).forEach(input => { input.value = ''; input.classList.remove('active'); });
     resetPagination();
+    updateActionLabels();
   });
 
   function downloadFile(filename, content, mime){
