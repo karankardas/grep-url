@@ -37,10 +37,14 @@
   </div>
 
   <div class="toolbar" id="toolbar">
-    <input type="text" id="filterInput" placeholder="filter results... (e.g. /api, token, admin)">
+    <input type="text" id="filterInput" placeholder="filter all panels... supports -exclude, &quot;exact phrase&quot;, /regex/">
     <button class="btn" id="exportJson">export .json</button>
     <button class="btn ghost" id="exportTxt">export .txt</button>
     <button class="btn ghost" id="clearAll">clear</button>
+  </div>
+  <div class="filter-hint" id="filterHint">
+    each panel below also has its own local filter, so a term typed there only searches that column &middot;
+    <code>-word</code> excludes &middot; <code>"exact phrase"</code> matches literally &middot; <code>/regex/i</code> for regex
   </div>
 
   <div class="grid" id="grid">
@@ -49,6 +53,7 @@
         <div class="pane-title">urls <span class="pane-count" id="cUrls">0</span></div>
         <div class="pane-actions"><button class="icon-btn" data-copy="urls">copy all</button></div>
       </div>
+      <div class="pane-filter"><input type="text" id="filterUrls" placeholder="filter urls only..."></div>
       <div class="pane-body" id="paneUrls"></div>
     </div>
     <div class="pane">
@@ -56,6 +61,7 @@
         <div class="pane-title">endpoints <span class="pane-count" id="cEndpoints">0</span></div>
         <div class="pane-actions"><button class="icon-btn" data-copy="endpoints">copy all</button></div>
       </div>
+      <div class="pane-filter"><input type="text" id="filterEndpoints" placeholder="filter endpoints only..."></div>
       <div class="pane-body" id="paneEndpoints"></div>
     </div>
     <div class="pane">
@@ -63,6 +69,7 @@
         <div class="pane-title">parameters <span class="pane-count" id="cParams">0</span></div>
         <div class="pane-actions"><button class="icon-btn" data-copy="params">copy all</button></div>
       </div>
+      <div class="pane-filter"><input type="text" id="filterParams" placeholder="filter params only..."></div>
       <div class="pane-body" id="paneParams"></div>
     </div>
   </div>
